@@ -1,0 +1,7 @@
+# Copy this file to terraform.tfvars and fill in your values
+# DO NOT commit terraform.tfvars to version control
+
+do_token     = "your-digitalocean-api-token"
+ssh_key_name = "your-ssh-key-name-in-digitalocean"
+region       = "fra1"
+droplet_size = "s-1vcpu-2gb"

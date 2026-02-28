@@ -1,0 +1,19 @@
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/.terraform.lock.hcl
+terraform/terraform.tfvars
+
+# Keys (sensitive!)
+keys/
+
+# Client config (contains private key)
+client-config/
+
+# Editor
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
