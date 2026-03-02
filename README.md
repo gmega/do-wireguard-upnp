@@ -123,6 +123,7 @@ curl -4 ifconfig.me
 ├── scripts/
 │   ├── setup-server.sh         # Server provisioning script
 │   ├── setup-client.sh         # Client configuration generator
+│   ├── generate-split-tunnel.py # Split tunneling config generator
 │   └── test-upnp.sh            # UPnP functionality test
 ├── keys/                       # SSH and WireGuard keys (gitignored)
 ├── client-config/              # Generated client configs (gitignored)
@@ -149,6 +150,25 @@ curl -4 ifconfig.me
 - Client VPN IP: `10.66.66.2`
 - WireGuard port: `51820/udp`
 - UPnP port range: `1024-65535`
+
+## Split Tunneling (Bypass VPN for Google Meet)
+
+By default, all traffic is routed through the VPN (`AllowedIPs = 0.0.0.0/0`). To exclude Google Meet (and other Google services) so they use your direct internet connection instead:
+
+```bash
+# Generate the bypass config (updates wg-vpn.conf and creates google-bypass.sh):
+python3 scripts/generate-split-tunnel.py client-config/wg-vpn.conf
+
+# Copy both files to /etc/wireguard and restart:
+sudo cp client-config/wg-vpn.conf client-config/google-bypass.sh /etc/wireguard/
+sudo wg-quick down wg-vpn && sudo wg-quick up wg-vpn
+```
+
+The script fetches Google's published IP ranges from `gstatic.com/ipranges/goog.json` and generates a helper script (`google-bypass.sh`) that adds routing rules for Google's IP ranges via your real gateway. The WireGuard config gets `PostUp`/`PreDown` hooks in the `[Interface]` section to call this script automatically.
+
+This keeps `AllowedIPs = 0.0.0.0/0` intact (preserving wg-quick's default-route handling) while routing Google traffic directly.
+
+Re-run the script periodically to pick up changes to Google's IP ranges.
 
 ## Teardown
 
