@@ -55,7 +55,7 @@ PrivateKey = $CLIENT_PRIVATE_KEY
 [Peer]
 # VPN Server
 PublicKey = $SERVER_PUBLIC_KEY
-Endpoint = $SERVER_IP:51820
+Endpoint = $SERVER_IP:443
 # Route all traffic through VPN
 AllowedIPs = 0.0.0.0/0
 # Keep connection alive (important for NAT traversal)

@@ -141,14 +141,14 @@ curl -4 ifconfig.me
 | `region` | Droplet region | `fra1` |
 | `droplet_size` | Droplet size | `s-1vcpu-2gb` |
 | `droplet_name` | Droplet name | `vpn-exit-node` |
-| `wg_port` | WireGuard port | `51820` |
+| `wg_port` | WireGuard port | `443` |
 
 ### Network Configuration
 
 - VPN subnet: `10.66.66.0/24`
 - Server VPN IP: `10.66.66.1`
 - Client VPN IP: `10.66.66.2`
-- WireGuard port: `51820/udp`
+- WireGuard port: `443/udp`
 - UPnP port range: `1024-65535`
 
 ## Split Tunneling (Bypass VPN for Google Meet)

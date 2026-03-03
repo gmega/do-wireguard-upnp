@@ -59,7 +59,7 @@ echo "==> Configuring WireGuard..."
 cat > /etc/wireguard/wg0.conf << EOF
 [Interface]
 Address = 10.66.66.1/24
-ListenPort = 51820
+ListenPort = 443
 PrivateKey = $SERVER_PRIVATE_KEY
 
 # Client peer will be added by add-client script
@@ -156,7 +156,7 @@ echo "nftables rules:"
 nft list table inet filter
 echo ""
 echo "Listening ports:"
-ss -ulnp | grep -E '(51820|5000)' || echo "Ports not yet listening"
+ss -ulnp | grep -E '(443|5000)' || echo "Ports not yet listening"
 echo ""
 echo "==> Server setup complete!"
 echo "    Server public key is displayed above."

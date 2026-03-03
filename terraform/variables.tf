@@ -31,5 +31,5 @@ variable "ssh_key_name" {
 variable "wg_port" {
   description = "WireGuard listening port"
   type        = number
-  default     = 51820
+  default     = 443
 }
