@@ -61,6 +61,10 @@ PrivateKey = $CLIENT_PRIVATE_KEY
 # Use the VPN's DNS (optional - comment out if you prefer local DNS)
 # DNS = 1.1.1.1
 
+# Disable IPv6 to prevent leaks (tunnel is IPv4-only)
+PostUp = sysctl -w net.ipv6.conf.all.disable_ipv6=1
+PostDown = sysctl -w net.ipv6.conf.all.disable_ipv6=0
+
 [Peer]
 # VPN Server
 PublicKey = $SERVER_PUBLIC_KEY
@@ -84,6 +88,9 @@ MTU = 1300
 # Start wstunnel client before WireGuard connects
 PreUp = ip route add $SERVER_IP/32 via \$(ip route | grep default | awk '{print \$3}' | head -n1) dev \$(ip route | grep default | awk '{print \$5}' | head -n1) || true
 PreUp = WSTUNNEL_SECRET=\$(cat /etc/wireguard/wstunnel.env | cut -d= -f2) wstunnel client -L udp://127.0.0.1:51820:127.0.0.1:443 wss://$SERVER_IP:443 --connection-retry-max-backoff 30 & sleep 2
+# Disable IPv6 to prevent leaks (tunnel is IPv4-only)
+PostUp = sysctl -w net.ipv6.conf.all.disable_ipv6=1
+PostDown = sysctl -w net.ipv6.conf.all.disable_ipv6=0
 PostDown = pkill -f 'wstunnel client.*$SERVER_IP' || true
 PostDown = ip route del $SERVER_IP/32 || true
 
