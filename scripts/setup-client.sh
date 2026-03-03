@@ -26,6 +26,15 @@ fi
 
 SERVER_PUBLIC_KEY=$(cat "$KEYS_DIR/server_public.key")
 
+# Check for wstunnel secret
+if [ ! -f "$KEYS_DIR/wstunnel_secret" ]; then
+    echo "WARNING: wstunnel secret not found at $KEYS_DIR/wstunnel_secret"
+    echo "         wstunnel config will not be generated. Run setup-server.sh first."
+    WSTUNNEL_SECRET=""
+else
+    WSTUNNEL_SECRET=$(cat "$KEYS_DIR/wstunnel_secret")
+fi
+
 # Generate client keys if they don't exist
 if [ ! -f "$KEYS_DIR/client_private.key" ]; then
     echo "==> Generating WireGuard client keys..."
@@ -62,6 +71,35 @@ AllowedIPs = 0.0.0.0/0
 PersistentKeepalive = 25
 EOF
 
+# Generate wstunnel client config
+if [ -n "$WSTUNNEL_SECRET" ]; then
+    echo "==> Generating wstunnel client configuration..."
+    cat > "$CONFIG_DIR/wg-vpn-wstunnel.conf" << EOF
+[Interface]
+# Client VPN IP
+Address = 10.66.66.2/24
+PrivateKey = $CLIENT_PRIVATE_KEY
+MTU = 1300
+
+# Start wstunnel client before WireGuard connects
+PreUp = ip route add $SERVER_IP/32 via \$(ip route | grep default | awk '{print \$3}' | head -n1) dev \$(ip route | grep default | awk '{print \$5}' | head -n1) || true
+PreUp = WSTUNNEL_SECRET=\$(cat /etc/wireguard/wstunnel.env | cut -d= -f2) wstunnel client -L udp://127.0.0.1:51820:127.0.0.1:443 wss://$SERVER_IP:443 --connection-retry-max-backoff 30 & sleep 2
+PostDown = pkill -f 'wstunnel client.*$SERVER_IP' || true
+PostDown = ip route del $SERVER_IP/32 || true
+
+[Peer]
+# VPN Server (via wstunnel on localhost)
+PublicKey = $SERVER_PUBLIC_KEY
+Endpoint = 127.0.0.1:51820
+AllowedIPs = 0.0.0.0/0
+PersistentKeepalive = 25
+EOF
+
+    # Write the wstunnel secret into the config's environment
+    echo "WSTUNNEL_SECRET=$WSTUNNEL_SECRET" > "$CONFIG_DIR/wstunnel.env"
+    chmod 600 "$CONFIG_DIR/wstunnel.env"
+fi
+
 echo "==> Adding client peer to server..."
 ssh -i "$SSH_KEY" -o StrictHostKeyChecking=accept-new "root@$SERVER_IP" bash -s -- "$CLIENT_PUBLIC_KEY" << 'REMOTE_SCRIPT'
 set -euo pipefail
@@ -94,12 +132,24 @@ REMOTE_SCRIPT
 echo ""
 echo "==> Client configuration created!"
 echo ""
-echo "Configuration file: $CONFIG_DIR/wg-vpn.conf"
+echo "Configuration files:"
+echo "  Direct mode:   $CONFIG_DIR/wg-vpn.conf"
+if [ -n "$WSTUNNEL_SECRET" ]; then
+echo "  wstunnel mode: $CONFIG_DIR/wg-vpn-wstunnel.conf"
+fi
 echo ""
-echo "To activate the VPN:"
+echo "To activate the VPN (direct UDP mode):"
 echo "  sudo cp $CONFIG_DIR/wg-vpn.conf /etc/wireguard/"
 echo "  sudo wg-quick up wg-vpn"
 echo ""
+if [ -n "$WSTUNNEL_SECRET" ]; then
+echo "To activate the VPN (wstunnel fallback for restrictive networks):"
+echo "  Install wstunnel: https://github.com/erebe/wstunnel/releases"
+echo "  export WSTUNNEL_SECRET=\$(cat $CONFIG_DIR/wstunnel.env | cut -d= -f2)"
+echo "  sudo -E cp $CONFIG_DIR/wg-vpn-wstunnel.conf /etc/wireguard/"
+echo "  sudo -E wg-quick up wg-vpn-wstunnel"
+echo ""
+fi
 echo "To deactivate:"
 echo "  sudo wg-quick down wg-vpn"
 echo ""

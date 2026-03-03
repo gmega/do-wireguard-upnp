@@ -42,9 +42,16 @@ resource "digitalocean_firewall" "vpn_exit" {
     source_addresses = ["0.0.0.0/0", "::/0"]
   }
 
-  # WireGuard
+  # WireGuard (UDP)
   inbound_rule {
     protocol         = "udp"
+    port_range       = tostring(var.wg_port)
+    source_addresses = ["0.0.0.0/0", "::/0"]
+  }
+
+  # wstunnel (TCP) — WebSocket fallback for WireGuard on restrictive networks
+  inbound_rule {
+    protocol         = "tcp"
     port_range       = tostring(var.wg_port)
     source_addresses = ["0.0.0.0/0", "::/0"]
   }

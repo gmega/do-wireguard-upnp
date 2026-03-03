@@ -26,13 +26,24 @@ fi
 SERVER_PRIVATE_KEY=$(cat "$SCRIPT_DIR/../keys/server_private.key")
 SERVER_PUBLIC_KEY=$(cat "$SCRIPT_DIR/../keys/server_public.key")
 
+# Generate wstunnel secret if it doesn't exist
+if [ ! -f "$SCRIPT_DIR/../keys/wstunnel_secret" ]; then
+    echo "==> Generating wstunnel shared secret..."
+    mkdir -p "$SCRIPT_DIR/../keys"
+    openssl rand -hex 32 > "$SCRIPT_DIR/../keys/wstunnel_secret"
+    chmod 600 "$SCRIPT_DIR/../keys/wstunnel_secret"
+fi
+
+WSTUNNEL_SECRET=$(cat "$SCRIPT_DIR/../keys/wstunnel_secret")
+
 echo "==> Server public key: $SERVER_PUBLIC_KEY"
 
 # Run setup on remote server
-ssh -i "$SSH_KEY" -o StrictHostKeyChecking=accept-new "$SERVER" bash -s -- "$SERVER_PRIVATE_KEY" << 'REMOTE_SCRIPT'
+ssh -i "$SSH_KEY" -o StrictHostKeyChecking=accept-new "$SERVER" bash -s -- "$SERVER_PRIVATE_KEY" "$WSTUNNEL_SECRET" << 'REMOTE_SCRIPT'
 set -euo pipefail
 
 SERVER_PRIVATE_KEY="$1"
+WSTUNNEL_SECRET="$2"
 
 echo "==> Updating system..."
 export DEBIAN_FRONTEND=noninteractive
@@ -144,6 +155,45 @@ echo "==> Enabling miniupnpd..."
 systemctl enable miniupnpd
 systemctl restart miniupnpd
 
+echo "==> Installing wstunnel..."
+WSTUNNEL_VERSION="10.5.2"
+WSTUNNEL_URL="https://github.com/erebe/wstunnel/releases/download/v${WSTUNNEL_VERSION}/wstunnel_${WSTUNNEL_VERSION}_linux_amd64.tar.gz"
+if [ ! -f /usr/local/bin/wstunnel ] || ! /usr/local/bin/wstunnel --version 2>/dev/null | grep -q "$WSTUNNEL_VERSION"; then
+    curl -fsSL "$WSTUNNEL_URL" -o /tmp/wstunnel.tar.gz
+    tar -xzf /tmp/wstunnel.tar.gz -C /tmp wstunnel
+    install -m 755 /tmp/wstunnel /usr/local/bin/wstunnel
+    rm -f /tmp/wstunnel.tar.gz /tmp/wstunnel
+fi
+echo "    wstunnel version: $(/usr/local/bin/wstunnel --version)"
+
+echo "==> Configuring wstunnel..."
+mkdir -p /etc/wstunnel
+
+# wstunnel reads WSTUNNEL_SECRET from environment via EnvironmentFile
+echo "WSTUNNEL_SECRET=$WSTUNNEL_SECRET" > /etc/wstunnel/secret
+chmod 600 /etc/wstunnel/secret
+
+cat > /etc/systemd/system/wstunnel-server.service << EOF
+[Unit]
+Description=wstunnel server (WebSocket tunnel for WireGuard)
+After=network.target wg-quick@wg0.service
+Wants=wg-quick@wg0.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/wstunnel/secret
+ExecStart=/usr/local/bin/wstunnel server wss://[::]:443 --restrict-to 127.0.0.1:443
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable wstunnel-server
+systemctl restart wstunnel-server
+
 echo "==> Verifying setup..."
 echo ""
 echo "WireGuard status:"
@@ -155,8 +205,11 @@ echo ""
 echo "nftables rules:"
 nft list table inet filter
 echo ""
+echo "wstunnel status:"
+systemctl status wstunnel-server --no-pager || true
+echo ""
 echo "Listening ports:"
-ss -ulnp | grep -E '(443|5000)' || echo "Ports not yet listening"
+ss -tulnp | grep -E '(443|5000)' || echo "Ports not yet listening"
 echo ""
 echo "==> Server setup complete!"
 echo "    Server public key is displayed above."

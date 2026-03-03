@@ -15,9 +15,13 @@ When connected, your P2P applications can use UPnP to request port mappings on t
 │  P2P App        │         │  ┌─────────┐    ┌───────────┐  │
 │    │            │         │  │WireGuard│    │ miniupnpd │  │
 │    ▼            │         │  │  wg0    │◄───│  (UPnP)   │  │
-│  UPnP Request ──┼── WG ───┼─►│10.66.66.1    │           │  │
+│  UPnP Request ──┼── WG ───┼─►│ UDP 443 │    │           │  │
 │                 │  Tunnel │  └────┬────┘    └─────┬─────┘  │
-│  10.66.66.2     │         │       │               │        │
+│  10.66.66.2     │  (UDP)  │       │               │        │
+│                 │   or    │  ┌────┴────┐          │        │
+│  wstunnel ──────┼── WSS ──┼─►│wstunnel │          │        │
+│  (optional)     │  (TCP)  │  │ TCP 443 │          │        │
+│                 │         │  └─────────┘          │        │
 └─────────────────┘         │       ▼               ▼        │
                             │    ┌─────────────────────┐     │
                             │    │   nftables NAT      │     │
@@ -123,6 +127,7 @@ curl -4 ifconfig.me
 ├── scripts/
 │   ├── setup-server.sh         # Server provisioning script
 │   ├── setup-client.sh         # Client configuration generator
+│   ├── connect-wstunnel.sh     # Connect via wstunnel fallback
 │   ├── generate-split-tunnel.py # Split tunneling config generator
 │   └── test-upnp.sh            # UPnP functionality test
 ├── keys/                       # SSH and WireGuard keys (gitignored)
@@ -149,7 +154,58 @@ curl -4 ifconfig.me
 - Server VPN IP: `10.66.66.1`
 - Client VPN IP: `10.66.66.2`
 - WireGuard port: `443/udp`
+- wstunnel port: `443/tcp` (WebSocket fallback)
 - UPnP port range: `1024-65535`
+
+## wstunnel Fallback (for Restrictive Networks)
+
+Some networks (conference Wi-Fi, hotel captive portals, corporate firewalls) block all UDP traffic, which breaks the default WireGuard connection. wstunnel wraps WireGuard's UDP packets inside a WebSocket over TCP 443, making the traffic look like normal HTTPS.
+
+Both modes can coexist on the server since WireGuard uses UDP 443 and wstunnel uses TCP 443.
+
+### Connection modes
+
+| Mode | Config file | Transport | When to use |
+|------|------------|-----------|-------------|
+| Direct | `wg-vpn.conf` | UDP 443 | Default — most networks |
+| wstunnel | `wg-vpn-wstunnel.conf` | TCP 443 (WebSocket) | Fallback — UDP-blocked networks |
+
+### Using wstunnel mode
+
+1. **Install wstunnel on your client machine** (same version as server — v10.5.2):
+   ```bash
+   # Download from https://github.com/erebe/wstunnel/releases/tag/v10.5.2
+   ```
+
+2. **Connect using the helper script:**
+   ```bash
+   sudo ./scripts/connect-wstunnel.sh
+   ```
+
+3. **Or manually:**
+   ```bash
+   export WSTUNNEL_SECRET=$(cat client-config/wstunnel.env | cut -d= -f2)
+   sudo -E cp client-config/wg-vpn-wstunnel.conf /etc/wireguard/
+   sudo -E wg-quick up wg-vpn-wstunnel
+   ```
+
+4. **Disconnect:**
+   ```bash
+   sudo wg-quick down wg-vpn-wstunnel
+   ```
+
+### How it works
+
+```
+Client                          Server
+──────                          ──────
+WireGuard ──UDP──► wstunnel     wstunnel ──UDP──► WireGuard
+  (wg0)     :51820  client       server     :443    (wg0)
+                      │                       ▲
+                      └──WSS (TCP 443)────────┘
+```
+
+The client's wstunnel process listens on `127.0.0.1:51820` and forwards WireGuard's UDP packets over a WebSocket to the server's wstunnel on TCP 443, which delivers them to WireGuard's UDP 443.
 
 ## Split Tunneling (Bypass VPN for Google Meet)
 
