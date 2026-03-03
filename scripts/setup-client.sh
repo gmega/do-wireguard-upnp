@@ -87,7 +87,7 @@ MTU = 1300
 
 # Start wstunnel client before WireGuard connects
 PreUp = ip route add $SERVER_IP/32 via \$(ip route | grep default | awk '{print \$3}' | head -n1) dev \$(ip route | grep default | awk '{print \$5}' | head -n1) || true
-PreUp = WSTUNNEL_SECRET=\$(cat /etc/wireguard/wstunnel.env | cut -d= -f2) wstunnel client -L udp://127.0.0.1:51820:127.0.0.1:443 wss://$SERVER_IP:443 --connection-retry-max-backoff 30 & sleep 2
+PreUp = WSTUNNEL_SECRET=\$(cat /etc/wireguard/wstunnel.env | cut -d= -f2) wstunnel client -L udp://127.0.0.1:51820:127.0.0.1:443 wss://$SERVER_IP:443 --socket-so-mark 51820 --connection-retry-max-backoff 30 > /tmp/wstunnel.log 2>&1 & sleep 2
 # Disable IPv6 to prevent leaks (tunnel is IPv4-only)
 PostUp = sysctl -w net.ipv6.conf.all.disable_ipv6=1
 PostDown = sysctl -w net.ipv6.conf.all.disable_ipv6=0
