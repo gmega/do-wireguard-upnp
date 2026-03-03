@@ -1,6 +1,6 @@
 # VPN Exit Node with UPnP
 
-[Warning: This is AI-generated, and I have not reviewed it throughly. Be careful.]
+[Warning: A lot of this is AI-generated, and I have not reviewed it throughly. Be careful.]
 
 A Terraform + shell-based deployment for a WireGuard VPN exit node with UPnP support. Designed for scenarios where you need to demo P2P software from networks without port forwarding (hotels, conferences, corporate networks).
 
